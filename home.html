@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Wall Vote</title>
+<link href="jquery-ui.css" rel="stylesheet" />
+<link href="bootstrap.min.css" rel="stylesheet" />
+<style type="text/css">
+    #status{
+        position:absolute;
+        left:0;
+        top:0;
+        background-color:#ccc;
+        height:auto;
+        width:auto;
+        min-height:0px;
+        min-width:0;
+        z-index:1000;
+        padding:2px;
+    }
+    #canvas{
+        position:absolute;
+        left:0;
+        top:0;
+        background-color:#f0f0f0;
+        width:100%;
+        height:100%;
+        z-index:1000;
+    }
+    #tools{
+        position: absolute;
+        z-index:1001;
+        width:100%;
+        right:4px;
+        top: 4px;
+    }
+    .card{
+        position:absolute;
+        min-width:100px;
+        width:180px;
+        min-height:70px;
+        height:70px;
+        background-color:#999;
+        padding:10px;
+        overflow:scroll;
+        -webkit-box-shadow: 2px 2px 2px 0px rgba(50, 50, 50, 0.75);
+        -moz-box-shadow:    2px 2px 2px 0px rgba(50, 50, 50, 0.75);
+        box-shadow:         2px 2px 2px 0px rgba(50, 50, 50, 0.75)
+    }
+    .plusButton{
+       position: absolute;
+       right: 2px;
+       bottom: 2px;
+    }
+    .owner{
+        color:#fff;
+        position:absolute;
+        left:4;
+        bottom:0;
+        font-size:1em;
+    }
+</style>
+<script type="text/javascript" src="jquery.min.js"></script>
+<script type="text/javascript" src="jquery-ui.min.js"></script>
+<script type="text/javascript" src="bootstrap.min.js"></script>
+<script type="text/javascript" src="wall.js"></script>
+<script type="text/javascript">
+$(function() {
+
+        var canvas = $('#canvas');
+        var log = $("#status");
+        var storage = window["localStorage"];
+        var name = null;
+
+        function appendLog(msg) {
+            log.html(msg);
+        }
+
+        function addToCanvas(card) {
+            card.appendTo(canvas);
+        }
+
+        $('#addCard').bind('click', function(){
+            text = prompt("Your awesome Idea in 1 sentence?");
+            if(text){
+                wall.addCard(text, name);
+            }
+        });
+
+        function makeACard(cardData){
+                card = $("<div/>")
+                        .attr("class","card panel")
+                        .html("<h4>" + cardData["Text"] + "</h4>")
+                        .attr("id", cardData["Id"])
+                        .css("left", cardData["X"] + "px")
+                        .css("top", cardData["Y"] + "px")
+                        .data("plus_count", cardData["Votes"].length);
+
+                lbl = $("<div/>")
+                        .attr("class","owner")
+                        .text(cardData["Name"])
+                        .appendTo(card);
+
+                btn = $('<button type="button"/>').text("+" + cardData["Votes"].length)
+                    .attr("class","plusButton btn btn-danger")
+                    .data("plus", cardData["Votes"])
+                    .bind("click", function(e){ wall.plusCard(cardData["Id"], name);})
+                    .appendTo(card);
+                //if (sdata["Votes"].indexOf(name) == -1){btn.attr("style", "color:#999;");}
+                addToCanvas(card); 
+                $('#' + cardData["Id"]).draggable({
+                    snap: true, 
+                    containment: "parent",
+                    drag: function(e, ui){
+                        x = $('#' + cardData["Id"]).position().left;
+                        y = $('#' + cardData["Id"]).position().top;
+                        wall.moveCard(cardData["Id"], name, "" + x, "" + y);
+                    } 
+                });
+        }
+        function getUserName() { return storage.getItem('uname'); }
+        function setUserName(uname) { return storage.setItem('uname', uname);}
+        function clearUserName(){ storage.clear(); }
+        function onSocketClose(evt) { appendLog($("<div><b>Connection closed.</b></div>")); }
+        function onSocketMessage(evt) { 
+            var scmd = JSON.parse(evt.data);
+            console.log(scmd);
+            if(scmd["Cmd"] == "setup") {
+                appendLog($("<div/>").text(scmd["Message"]));
+                $.each(scmd["Data"]["Cards"], function(k, v){
+                    makeACard(v);
+                });
+            }else if(scmd["Cmd"] == "message") {
+                appendLog($("<div/>").text(scmd["Message"])) 
+            }else if(scmd["Cmd"] == "card_added") {
+                cardData = scmd["Data"]; 
+                makeACard(cardData);
+                //console.log(cardData);
+                //appendLog($("<div/>").text(scmd["Message"])) ;
+            }else if(scmd["Cmd"] == "card_plused" || scmd["Cmd"] == "card_unplused") {
+                plusData = scmd["Data"]; 
+                dcard = $('#' + plusData["Id"]);
+                dbutton = $('#' + plusData["Id"] + "> button");
+                dcard.data("plus_count", plusData["Votes"].length);
+                dbutton.data("plus", plusData["Votes"]);
+                dbutton.text("+" + plusData["Votes"].length);
+            }else if(scmd["Cmd"] == "card_moved"){
+                cardData = scmd["Data"]; 
+                dcard = $('#' + cardData["Id"]);
+                dcard.css("left", cardData["X"] + "px");
+                dcard.css("top", cardData["Y"] + "px");
+                appendLog($("<div/>").text("Moved."));
+            }else{
+                appendLog($("<div/>").text("Not understood.")) 
+            }
+        }
+
+        clearUserName();
+        name = getUserName();
+        if(!name){
+            name = prompt("Your Name?");
+            setUserName(name);
+            if(name){
+                if (window["WebSocket"]) {
+                    var wall = new Wall( "{{$}}", name, onSocketClose, onSocketMessage);
+                    wall.initSocket();
+                    $('#wallOwner').html(name);
+                    $("#addCard").show();
+                }else{
+                    appendLog($("<div><b>Your browser does not support WebSockets.</b></div>"))
+                }
+            }else{
+                $("#addCard").hide();
+            }
+        }
+});
+</script>
+<style type="text/css">
+</style>
+</head>
+<body>
+<div id="canvas">
+    <div id="status"></div>
+</div>
+<div id="tools" style="text-align:right;"> 
+    <span id="wallOwner" class="badge">Hello!</span>
+    <input type="button" class="btn btn-primary" value="Add New Idea" name="addCard" id="addCard" />
+</div>
+</body>
+</html>
