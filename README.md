@@ -27,4 +27,4 @@ using the following commands.
 
 ## Base Code
 
-The implemention is the extension of the code given in this [Chat Example](http://github.com/gorilla/chat)
+The implemention is the extension of the code given in this [Chat Example](https://github.com/gorilla/websocket/tree/master/examples/chat)
